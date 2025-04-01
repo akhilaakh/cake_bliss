@@ -318,6 +318,7 @@ class CustomizationDetailView extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('customizations')
             .where('userId', isEqualTo: userId)
+            //checking the update in admin side
             // Using client-side sorting instead of orderBy to avoid needing a Firestore index
             .snapshots(),
         builder: (context, snapshot) {
@@ -546,5 +547,3 @@ class CustomizationDetailView extends StatelessWidget {
     );
   }
 }
-
-
