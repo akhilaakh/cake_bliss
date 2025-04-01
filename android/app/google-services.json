@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1080790937303",
+    "project_id": "cake-bliss-6affe",
+    "storage_bucket": "cake-bliss-6affe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1080790937303:android:4fd1aa1e3449f0d306ca92",
+        "android_client_info": {
+          "package_name": "com.example.cake_bliss"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBu4upVDPwi-3JBvxquUgeSPJlwjzaRBgo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
