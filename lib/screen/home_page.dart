@@ -505,6 +505,7 @@
 // }
 
 // home_page.dart
+import 'package:cake_bliss/about_us.dart';
 import 'package:cake_bliss/bloc/home/block.dart';
 import 'package:cake_bliss/bloc/home/event.dart';
 import 'package:cake_bliss/bloc/home/state.dart';
@@ -650,6 +651,12 @@ class _HomeViewState extends State<HomeView> {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const Privacypolicy()),
+        );
+        break;
+      case 'AboutUs':
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AboutUs()),
         );
     }
   }
@@ -812,6 +819,17 @@ class _HomeViewState extends State<HomeView> {
                               Icon(Icons.rule_folder, color: Colors.black),
                               SizedBox(width: 8),
                               Text('TermsAndConditions'),
+                            ],
+                          ),
+                        ),
+
+                        const PopupMenuItem(
+                          value: 'AboutUs',
+                          child: Row(
+                            children: [
+                              Icon(Icons.abc_outlined, color: Colors.black),
+                              SizedBox(width: 8),
+                              Text('AboutUs'),
                             ],
                           ),
                         ),
