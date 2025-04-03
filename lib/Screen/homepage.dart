@@ -83,13 +83,13 @@ class _HomepageState extends State<Homepage> {
       },
       {
         'title': 'order',
-        'route': AdminOrdersPage(),
+        'route': const AdminOrdersPage(),
         'image':
             'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
       },
       {
         'title': 'chat',
-        'route': AdminUserList(),
+        'route': AdminChatList(),
         'image':
             'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
       },
@@ -122,7 +122,7 @@ class _HomepageState extends State<Homepage> {
         child: Padding(
           padding: const EdgeInsets.only(top: 30.0), // Add padding for gap
           child: Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(30),
                 topRight: Radius.circular(30),
