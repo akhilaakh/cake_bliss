@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:cakebliss_admin/constants/appcolor.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 
 // Your user model for reference
 class UserModel {
@@ -42,6 +47,9 @@ class AdminChatServices {
   // Get instance of firestore
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseStorage _storage =
+      FirebaseStorage.instance; // Initialize storage
+  final Uuid _uuid = Uuid();
 
   // Get current admin email
   String getCurrentAdminEmail() {
@@ -179,7 +187,58 @@ class AdminChatServices {
       'lastMessageSender': adminEmail
     }, SetOptions(merge: true));
   }
+
   // getMessagesWithUser
+  Future<void> sendImageMessage(String userEmail, File imageFile) async {
+    try {
+      final String adminEmail = getCurrentAdminEmail();
+      final Timestamp timestamp = Timestamp.now();
+      final chatRoomId = getChatRoomId(adminEmail, userEmail);
+
+      // Generate a unique file name
+      String fileName = '${_uuid.v4()}.jpg';
+
+      // Create a storage reference
+      Reference storageRef =
+          _storage.ref().child('chat_images').child(chatRoomId).child(fileName);
+
+      // Upload the file
+      UploadTask uploadTask = storageRef.putFile(imageFile);
+
+      // Wait for the upload to complete and get the download URL
+      TaskSnapshot taskSnapshot = await uploadTask;
+      String imageUrl = await taskSnapshot.ref.getDownloadURL();
+
+      // Create a new message with image
+      Map<String, dynamic> newMessage = {
+        'senderEmail': adminEmail,
+        'receiverEmail': userEmail,
+        'message': 'Photo',
+        'imageUrl': imageUrl,
+        'isImage': true,
+        'timestamp': timestamp,
+        'isRead': false
+      };
+
+      // Add the message to the database
+      await _firestore
+          .collection('chat_rooms')
+          .doc(chatRoomId)
+          .collection('messages')
+          .add(newMessage);
+
+      // Update the chat room info with last message
+      await _firestore.collection('chat_rooms').doc(chatRoomId).set({
+        'users': [adminEmail, userEmail],
+        'lastMessage': '📷 Photo',
+        'lastMessageTimestamp': timestamp,
+        'lastMessageSender': adminEmail
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('Error sending image message: $e');
+      throw e; // Re-throw the exception to handle it in the UI
+    }
+  }
 
   // Get messages with a specific user
   Stream<QuerySnapshot> getMessagesWithUser(String userEmail) {
@@ -546,12 +605,59 @@ class _AdminChatPageState extends State<AdminChatPage> {
   final AdminChatServices _chatServices = AdminChatServices();
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final ScrollController _scrollController = ScrollController();
+  final ImagePicker _imagePicker = ImagePicker(); // Added ImagePicker
+  bool _isSendingImage = false;
 
   @override
   void initState() {
     super.initState();
     // Mark messages as read when opening chat
     _chatServices.markMessagesAsRead(widget.userEmail);
+  }
+
+  // Add image picking method
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedImage = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70, // Compress image for faster upload
+      );
+
+      if (pickedImage != null) {
+        setState(() {
+          _isSendingImage = true;
+        });
+
+        // Convert XFile to File
+        File imageFile = File(pickedImage.path);
+
+        // Send image
+        await _chatServices.sendImageMessage(widget.userEmail, imageFile);
+
+        setState(() {
+          _isSendingImage = false;
+        });
+
+        // Scroll to bottom after sending image
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isSendingImage = false;
+      });
+      print("Error picking image: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to send image: $e")),
+      );
+    }
   }
 
   void _sendMessage() async {
@@ -795,12 +901,21 @@ class _AdminChatPageState extends State<AdminChatPage> {
   Widget _buildMessageItem(DocumentSnapshot document) {
     Map<String, dynamic> data = document.data() as Map<String, dynamic>;
     bool isAdmin = data['senderEmail'] == _auth.currentUser!.email;
+    bool isImage = data['isImage'] == true;
 
     // Format timestamp
     String formattedTime = '';
     if (data['timestamp'] != null) {
       DateTime messageTime = (data['timestamp'] as Timestamp).toDate();
       formattedTime = DateFormat.jm().format(messageTime);
+    }
+    if (isImage) {
+      return _buildImageBubble(
+        imageUrl: data['imageUrl'],
+        isAdmin: isAdmin,
+        timestamp: data['timestamp'],
+        message: data['message'] ?? '',
+      );
     }
 
     return Padding(
@@ -838,12 +953,117 @@ class _AdminChatPageState extends State<AdminChatPage> {
     );
   }
 
+// New image bubble widget for admin side
+  Widget _buildImageBubble({
+    required String imageUrl,
+    required bool isAdmin,
+    required Timestamp timestamp,
+    required String message,
+  }) {
+    final time = DateFormat.jm().format(timestamp.toDate());
+
+    return Align(
+      alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+          maxHeight: 200,
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: isAdmin ? AppColors().mainColor : Colors.grey[200],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isAdmin ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Image with loading indicator
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: GestureDetector(
+                onTap: () {
+                  // View image in full screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => FullScreenImage(imageUrl: imageUrl),
+                    ),
+                  );
+                },
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: 150,
+                  ),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        width: 200,
+                        height: 150,
+                        padding: EdgeInsets.all(8),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color:
+                                isAdmin ? Colors.white : AppColors().mainColor,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 200,
+                        height: 150,
+                        padding: EdgeInsets.all(8),
+                        child: Center(
+                          child: Icon(
+                            Icons.error_outline,
+                            color: isAdmin ? Colors.white70 : Colors.red[300],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            // Timestamp
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                time,
+                style: TextStyle(
+                  color: isAdmin ? Colors.white70 : Colors.black54,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageInput() {
     return Container(
       padding: const EdgeInsets.all(12),
       color: Colors.white,
       child: Row(
         children: [
+          IconButton(
+            icon: Icon(
+              Icons.photo_library,
+              color: AppColors().mainColor,
+            ),
+            onPressed: _isSendingImage ? null : _pickImage,
+          ),
           // Text input
           Expanded(
             child: TextField(
@@ -869,13 +1089,25 @@ class _AdminChatPageState extends State<AdminChatPage> {
           ),
           // Send button
           const SizedBox(width: 8),
-          CircleAvatar(
-            backgroundColor: AppColors().mainColor,
-            child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: _sendMessage,
-            ),
-          ),
+          _isSendingImage
+              ? CircleAvatar(
+                  backgroundColor: AppColors().mainColor.withOpacity(0.7),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              : CircleAvatar(
+                  backgroundColor: AppColors().mainColor,
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: _sendMessage,
+                  ),
+                ),
         ],
       ),
     );
@@ -886,5 +1118,46 @@ class _AdminChatPageState extends State<AdminChatPage> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+}
+
+class FullScreenImage extends StatelessWidget {
+  final String imageUrl;
+
+  const FullScreenImage({Key? key, required this.imageUrl}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          panEnabled: true,
+          minScale: 0.5,
+          maxScale: 3,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                      : null,
+                  color: Colors.white,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 }
