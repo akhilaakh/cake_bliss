@@ -1,14 +1,20 @@
 // chat_services.dart (User side)
+import 'dart:io';
+
 import 'package:cake_bliss/constants/app_colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as path;
 
 class UserChatServices {
   // Get instance of firestore
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
   // Get current user email
   String getCurrentUserEmail() {
@@ -39,6 +45,59 @@ class UserChatServices {
     List<String> ids = [user, admin];
     ids.sort();
     return '${ids[0]}_${ids[1]}';
+  }
+
+  Future<void> sendImageMessage(String adminEmail, File imageFile) async {
+    try {
+      // Get current user info
+      final String userEmail = getCurrentUserEmail();
+      if (userEmail.isEmpty) {
+        throw Exception("User not logged in or email not available");
+      }
+
+      final Timestamp timestamp = Timestamp.now();
+      final String fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${path.basename(imageFile.path)}';
+      final Reference storageRef =
+          _storage.ref().child('chat_images/$fileName');
+
+      // Upload image to Firebase Storage
+      final UploadTask uploadTask = storageRef.putFile(imageFile);
+      final TaskSnapshot taskSnapshot = await uploadTask;
+      final String imageUrl = await taskSnapshot.ref.getDownloadURL();
+
+      // Create a new message with image URL
+      Map<String, dynamic> newMessage = {
+        'senderEmail': userEmail,
+        'receiverEmail': adminEmail,
+        'message': '', // Empty message for image
+        'imageUrl': imageUrl,
+        'timestamp': timestamp,
+        'isRead': false,
+        'isImage': true,
+      };
+
+      // Construct chat room ID
+      final chatRoomId = getChatRoomId(userEmail, adminEmail);
+
+      // Add the message to the database
+      await _firestore
+          .collection('chat_rooms')
+          .doc(chatRoomId)
+          .collection('messages')
+          .add(newMessage);
+
+      // Update the chat room info with last message
+      await _firestore.collection('chat_rooms').doc(chatRoomId).set({
+        'users': [userEmail, adminEmail],
+        'lastMessage': '📷 Image',
+        'lastMessageTimestamp': timestamp,
+        'lastMessageSender': userEmail
+      });
+    } catch (e) {
+      print("Error in sendImageMessage: $e");
+      throw e; // Re-throw to handle in UI
+    }
   }
 
   // Send message to admin
@@ -378,8 +437,10 @@ class _UserChatPageState extends State<UserChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final UserChatServices _chatServices = UserChatServices();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ImagePicker _imagePicker = ImagePicker();
   String? adminImageUrl;
   bool isLoading = true;
+  bool _isSendingImage = false;
 
   @override
   void initState() {
@@ -412,6 +473,39 @@ class _UserChatPageState extends State<UserChatPage> {
       setState(() {
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? pickedImage = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70, // Compress image for faster upload
+      );
+
+      if (pickedImage != null) {
+        setState(() {
+          _isSendingImage = true;
+        });
+
+        // Convert XFile to File
+        File imageFile = File(pickedImage.path);
+
+        // Send image
+        await _chatServices.sendImageMessage(widget.adminEmail, imageFile);
+
+        setState(() {
+          _isSendingImage = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isSendingImage = false;
+      });
+      print("Error picking image: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to send image: $e")),
+      );
     }
   }
 
@@ -551,22 +645,281 @@ class _UserChatPageState extends State<UserChatPage> {
           );
         }
 
-        // Build message list
+        // Process messages to group by date
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final yesterday = today.subtract(const Duration(days: 1));
+
+        // Get all messages and sort them chronologically (oldest to newest)
+        final List<QueryDocumentSnapshot> messages =
+            snapshot.data!.docs.toList();
+
+        // Group messages by date
+        final Map<String, List<QueryDocumentSnapshot>> messagesByDate = {};
+
+        for (final doc in messages) {
+          final data = doc.data() as Map<String, dynamic>;
+          final messageDate = (data['timestamp'] as Timestamp).toDate();
+          final messageDateOnly =
+              DateTime(messageDate.year, messageDate.month, messageDate.day);
+
+          // Determine date string for header
+          String dateString;
+          if (messageDateOnly == today) {
+            dateString = "Today";
+          } else if (messageDateOnly == yesterday) {
+            dateString = "Yesterday";
+          } else if (now.difference(messageDateOnly).inDays < 7) {
+            dateString = DateFormat('EEEE').format(messageDate); // day name
+          } else {
+            dateString = DateFormat('MMMM d, yyyy').format(messageDate);
+          }
+
+          if (!messagesByDate.containsKey(dateString)) {
+            messagesByDate[dateString] = [];
+          }
+
+          messagesByDate[dateString]!.add(doc);
+        }
+
+        // Build the list of widgets with date headers and messages
+        final List<Widget> messageWidgets = [];
+
+        // Sort the date keys in chronological order (oldest to newest)
+        final List<String> sortedDates = messagesByDate.keys.toList();
+        sortedDates.sort((a, b) {
+          // Special handling for "Today" and "Yesterday"
+          if (a == "Today") return 1;
+          if (b == "Today") return -1;
+          if (a == "Yesterday") return 1;
+          if (b == "Yesterday") return -1;
+
+          // For other dates, parse and compare
+          DateTime? dateA, dateB;
+          try {
+            if (!a.contains(",")) {
+              // It's a day name
+              final daysOfWeek = [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+              ];
+              final dayIndex = daysOfWeek.indexOf(a);
+              if (dayIndex != -1) {
+                dateA = today
+                    .subtract(Duration(days: today.weekday - 1 - dayIndex));
+              }
+            } else {
+              dateA = DateFormat('MMMM d, yyyy').parse(a);
+            }
+
+            if (!b.contains(",")) {
+              // It's a day name
+              final daysOfWeek = [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+              ];
+              final dayIndex = daysOfWeek.indexOf(b);
+              if (dayIndex != -1) {
+                dateB = today
+                    .subtract(Duration(days: today.weekday - 1 - dayIndex));
+              }
+            } else {
+              dateB = DateFormat('MMMM d, yyyy').parse(b);
+            }
+
+            if (dateA != null && dateB != null) {
+              return dateA.compareTo(dateB);
+            }
+          } catch (e) {
+            print("Error parsing dates: $e");
+          }
+
+          return a.compareTo(b);
+        });
+
+        // Build the final list in reverse order (for the reversed ListView)
+        for (int i = sortedDates.length - 1; i >= 0; i--) {
+          final dateString = sortedDates[i];
+          final messagesForDate = messagesByDate[dateString]!;
+
+          // Add all messages for this date in reverse order
+          // Inside _buildMessageList() where you handle different message types:
+          for (int j = messagesForDate.length - 1; j >= 0; j--) {
+            final data = messagesForDate[j].data() as Map<String, dynamic>;
+            // Check if message is an image or text
+            final bool isImage = data['isImage'] == true;
+            if (isImage) {
+              messageWidgets.add(
+                _buildImageBubble(
+                  // Use image bubble for images
+                  imageUrl: data['imageUrl'],
+                  isMe: data['senderEmail'] == _auth.currentUser?.email,
+                  timestamp: data['timestamp'],
+                  message:
+                      data['message'] ?? '', // Provide empty string as fallback
+                ),
+              );
+            } else {
+              messageWidgets.add(
+                _buildMessageBubble(
+                  message: data['message'] ?? '',
+                  isMe: data['senderEmail'] == _auth.currentUser?.email,
+                  timestamp: data['timestamp'],
+                  imageUrl: null, // Pass null for non-image messages
+                ),
+              );
+            }
+          }
+
+          // Add date header
+          messageWidgets.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Center(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    dateString,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        // Build message list with the correctly ordered widgets
         return ListView(
           padding: const EdgeInsets.all(16),
           reverse: true,
-          children: snapshot.data!.docs.reversed.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            final isMe = data['senderEmail'] == _auth.currentUser?.email;
-
-            return _buildMessageBubble(
-              message: data['message'],
-              isMe: isMe,
-              timestamp: data['timestamp'],
-            );
-          }).toList(),
+          children: messageWidgets,
         );
       },
+    );
+  }
+
+  // New widget for image bubble
+  Widget _buildImageBubble({
+    required imageUrl,
+    required bool isMe,
+    required Timestamp timestamp,
+    required String message,
+  }) {
+    final time = DateFormat('h:mm a').format(timestamp.toDate());
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth:
+              MediaQuery.of(context).size.width * 0.7, // 70% of screen width
+          maxHeight: 200, // Maximum height for images
+        ),
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        decoration: BoxDecoration(
+          color: isMe ? AppColors().mainColor : AppColors().subcolor,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft:
+                isMe ? const Radius.circular(16) : const Radius.circular(0),
+            bottomRight:
+                isMe ? const Radius.circular(0) : const Radius.circular(16),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Image with loading indicator
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: GestureDetector(
+                onTap: () {
+                  // View image in full screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => FullScreenImage(imageUrl: imageUrl),
+                    ),
+                  );
+                },
+                child: ConstrainedBox(
+                  // Add this to limit image size
+                  constraints: BoxConstraints(
+                    maxHeight: 150, // Limit image height
+                  ),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        width: 200,
+                        height: 150,
+                        padding: EdgeInsets.all(8),
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: isMe ? Colors.white : AppColors().mainColor,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        width: 200,
+                        height: 150,
+                        padding: EdgeInsets.all(8),
+                        child: Center(
+                          child: Icon(
+                            Icons.error_outline,
+                            color: isMe ? Colors.white70 : Colors.red[300],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+            // Timestamp
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                time,
+                style: TextStyle(
+                  color: isMe ? Colors.white70 : Colors.black54,
+                  fontSize: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -574,6 +927,7 @@ class _UserChatPageState extends State<UserChatPage> {
     required String message,
     required bool isMe,
     required Timestamp timestamp,
+    required imageUrl,
   }) {
     final time = DateFormat('h:mm a').format(timestamp.toDate());
 
@@ -644,6 +998,13 @@ class _UserChatPageState extends State<UserChatPage> {
       ),
       child: Row(
         children: [
+          IconButton(
+            icon: Icon(
+              Icons.photo_library,
+              color: AppColors().mainColor,
+            ),
+            onPressed: _isSendingImage ? null : _pickImage,
+          ),
           Expanded(
             child: TextField(
               controller: _messageController,
@@ -664,13 +1025,25 @@ class _UserChatPageState extends State<UserChatPage> {
             ),
           ),
           const SizedBox(width: 8),
-          CircleAvatar(
-            backgroundColor: AppColors().mainColor,
-            child: IconButton(
-              icon: const Icon(Icons.send, color: Colors.white),
-              onPressed: _sendMessage,
-            ),
-          ),
+          _isSendingImage
+              ? CircleAvatar(
+                  backgroundColor: AppColors().mainColor.withOpacity(0.7),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              : CircleAvatar(
+                  backgroundColor: AppColors().mainColor,
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: _sendMessage,
+                  ),
+                ),
         ],
       ),
     );
@@ -681,5 +1054,46 @@ class _UserChatPageState extends State<UserChatPage> {
     print("UserChatPage dispose called");
     _messageController.dispose();
     super.dispose();
+  }
+}
+
+class FullScreenImage extends StatelessWidget {
+  final String imageUrl;
+
+  const FullScreenImage({Key? key, required this.imageUrl}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          panEnabled: true,
+          minScale: 0.5,
+          maxScale: 3,
+          child: Image.network(
+            imageUrl,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Center(
+                child: CircularProgressIndicator(
+                  value: loadingProgress.expectedTotalBytes != null
+                      ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                      : null,
+                  color: Colors.white,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
   }
 }
