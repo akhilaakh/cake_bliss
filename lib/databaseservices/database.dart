@@ -331,4 +331,6 @@ class DatabaseService {
       throw e;
     }
   }
+
+  getAdminById(String uid) {}
 }

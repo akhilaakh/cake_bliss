@@ -39,4 +39,6 @@ class TypeModel {
       images: [],
     );
   }
+
+  copyWith({required List<String> images}) {}
 }

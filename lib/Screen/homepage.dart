@@ -1,10 +1,12 @@
 import 'package:cakebliss_admin/category/category_screen/add_category.dart';
 import 'package:cakebliss_admin/category/category_screen/view1_category.dart';
 import 'package:cakebliss_admin/chat/chat.dart';
-import 'package:cakebliss_admin/chatt/chat.dart';
 import 'package:cakebliss_admin/customization/custamer_list_custamization.dart';
-import 'package:cakebliss_admin/customization/customization_list.dart';
+import 'package:cakebliss_admin/offer.dart';
+import 'package:cakebliss_admin/offer/add_offer.dart';
+import 'package:cakebliss_admin/offer/list_offer.dart';
 import 'package:cakebliss_admin/order/order.dart';
+import 'package:cakebliss_admin/profile/profile_page.dart';
 import 'package:cakebliss_admin/type/add_type.dart';
 import 'package:flutter/material.dart';
 import 'package:cakebliss_admin/Login/login.dart';
@@ -76,20 +78,38 @@ class _HomepageState extends State<Homepage> {
             'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
       },
       {
-        'title': 'customization',
+        'title': 'Customization',
         'route': CustomerList(),
         'image':
             'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
       },
       {
-        'title': 'order',
+        'title': 'Order',
         'route': const AdminOrdersPage(),
         'image':
             'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
       },
       {
-        'title': 'chat',
+        'title': 'Chat',
         'route': AdminChatList(),
+        'image':
+            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+      },
+      {
+        'title': 'Add Offer',
+        'route': AddOfferPage(),
+        'image':
+            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+      },
+      {
+        'title': 'Offerlist',
+        'route': OfferListPage(),
+        'image':
+            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+      },
+      {
+        'title': 'Profile',
+        'route': ProfilePage(),
         'image':
             'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
       },

@@ -276,9 +276,8 @@ class CustomizationDetailView extends StatelessWidget {
 
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        backgroundColor:
-            isSelected ? color : const Color.fromARGB(255, 206, 210, 206),
-        foregroundColor: isSelected ? Colors.white : Colors.black,
+        backgroundColor: isSelected ? color : AppColors().mainColor,
+        foregroundColor: isSelected ? AppColors().subcolor : Colors.black,
         padding: const EdgeInsets.symmetric(horizontal: 8),
       ),
       onPressed: isSelected
