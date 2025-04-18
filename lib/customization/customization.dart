@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cake_bliss/constants/app_colors.dart';
 import 'package:cake_bliss/customization/customization_list.dart';
 import 'package:cake_bliss/customization/model/model.dart';
 import 'package:cake_bliss/databaseServices/database_service.dart';
@@ -108,7 +109,15 @@ class _CustomizationPageState extends State<CustomizationPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Customize Your Cake'),
+        toolbarHeight: 100,
+        backgroundColor: AppColors().mainColor,
+        title: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: const Text(
+            'Customize Your Cake',
+            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

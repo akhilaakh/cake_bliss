@@ -116,6 +116,8 @@ class _PrivacypolicyState extends State<Privacypolicy> {
             _buildCheckPoint(
                 'Customer Support: To respond to your queries and provide assistance'),
             _buildCheckPoint(
+                'Chat with baker: To respond to your queries and provide assistance'),
+            _buildCheckPoint(
                 'App Improvement: To enhance user experience and add new features'),
             const SizedBox(height: 16),
             _buildSectionTitle('3. Data Security'),

@@ -509,6 +509,7 @@ class _UserChatPageState extends State<UserChatPage> {
     }
   }
 
+//messages
   void _sendMessage() async {
     if (_messageController.text.trim().isNotEmpty) {
       try {

@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
+// import 'package:flutter/material.dart';
 
-class Homie extends StatelessWidget {
-  const Homie({super.key});
+// class Homie extends StatelessWidget {
+//   const Homie({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold();
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return const Scaffold();
+//   }
+// }
