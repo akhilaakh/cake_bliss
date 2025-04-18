@@ -81,19 +81,19 @@ class _HomepageState extends State<Homepage> {
         'title': 'Customization',
         'route': CustomerList(),
         'image':
-            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+            'assets/cake_decor__kitchen_art__dessert_drawing__sweet_treats__food_illustration__watercolor_design__cake_painting__digital_download__foodie_gift-removebg-preview.png',
       },
       {
         'title': 'Order',
         'route': const AdminOrdersPage(),
         'image':
-            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+            'assets/Cute_adorable_kawaii_birthday_cake_sticker-removebg-preview.png',
       },
       {
         'title': 'Chat',
         'route': AdminChatList(),
         'image':
-            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+            'assets/Wedding_Cake_Watercolor_Clipart_4_High_Quality_PNG__Digital_Download__Card_Making_Mixed_Media__Crafts_Clip_Art_-_394-removebg-preview (1).png',
       },
       {
         'title': 'Add Offer',
@@ -105,13 +105,13 @@ class _HomepageState extends State<Homepage> {
         'title': 'Offerlist',
         'route': OfferListPage(),
         'image':
-            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+            'assets/cake_decor__kitchen_art__dessert_drawing__sweet_treats__food_illustration__watercolor_design__cake_painting__digital_download__foodie_gift-removebg-preview.png',
       },
       {
         'title': 'Profile',
         'route': ProfilePage(),
         'image':
-            'assets/_Pink_Cupcake_Gourmet__Sticker_for_Sale_by_SHADOWNB69-removebg-preview.png',
+            'assets/Cute_adorable_kawaii_birthday_cake_sticker-removebg-preview.png',
       },
     ];
 
